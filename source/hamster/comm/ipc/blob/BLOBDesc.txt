@@ -1,0 +1,144 @@
+BLOBs
+
+REMEMBER - CLIENT HANDLERS NEED TO BUFFER OUTGOING DATA IF IT CAN'T ALL BE SENT IN ONE CALL.  THE DATA WILL BE RECLAIMED FROM THE SM INCOMING BUFFER
+IMMEDIATELY AFTER THE HANDLER IS CALLED TO CONSUME THEM.
+
+STATELESS OPERATION!!!!  PRODUCTION/CONSUMPTION FULLY DONE IN ONE METHOD CALL.
+This way, the BLOB access can be synchronized and accessed in many SM contexts simultaneously.  Useful with an ODA update to many SM-like objects.
+
+A BLOB instance should contain a list of its SM recipients.  When a recipient has finished consuming BLOB data, the recipient entry can be removed from the
+BLOB list.  When no more recipients are present in this list, the BLOB instance can be recycled by the BLOBManager implementation.  BLOBs are only
+/RETRIEVED/ at the SM level; handlers are only passed BLOBReaders to access them.
+
+USAGES:
+  In transferring large data between handlers in a Hamster system.
+  In transferring data blocks between communications and fx thread in a java fx application.
+
+The base operation should be independent of application.  For example, Hamster functionality such as a list of recipients can be built on top of a standard BLOB.
+BLOBManager and HamsterBLOBManager would be used, where HamsterBLOBManager uses BLOBManager. 
+
+Operations required:
+
+  FILL:     Fill from a stream. Example: Incoming remote Bridge message contains BLOB data.  Fill directly from stream.
+            This may take multiple fill() calls, but we can't forward the BLOB message to recipient(s) until
+            finished anyway.  Once in the BLOBManager, the BLOB can be consumed in SM-like contexts.
+  
+  PRODUCE:  Produce from handler. Example: handler produces BLOB data in request, response or ODA push update.  All BLOB data are produced
+            within one call by passing a BlockMessageWriter to the BLOBManager.  [The caller will receive a BLOBIdentifier
+            which can be used to access the BLOB instance for drain or consumption.
+            The BLOBIdentifier data is not accessible but the instance can be used for producing/consuming to/from block stream
+            objects. NO.  Handlers send BLOB data through the container.  The container can access BLOB manager directly.]
+  
+  DRAIN:    Drain to a stream.  Example: BLOB needs to be sent to remote Hamster process or a handler client.  This may take place over multiple
+            network calls.  There should be no state within the BLOB instance as multiple contexts may be using it.  The caller
+            should therefore indicate where the BLOB data should start draining from.  In practice this may come from the implementation
+            passed to the handler; handler does not interact with low-level BLOB management levels itself but through a simplified interface.
+  
+  CONSUME:  Consume to handler. Example: Handler has received a BLOB instance and wishes to consume.  
+            [<BOLLOCKS> 
+            The handler has been called through BridgeTargetHandler
+            with a BLOBConsumer.  The target is provided with a read data callback mechanism which can be called with a ReadBlockHandler
+            instance through which the data can be consumed.  This may seem a little unneccessary, but it allows non-BLOB data
+            consumption to use the same mechanism as BLOB data consumption.  The BLOB data consumption may have inherent thread
+            synchronization added transparently. 
+            *{Above - can't guarantee to send all BLOB data in one call if a handler wishes to send to client.  It needs to send
+            the uninterpreted BLOBID data on the stream to the client.  The client can connect to a separate handler on the 
+            Hamster server which provides BLOB data to callers.  Otherwise, we can't send whole BLOBs through handler objects}*MORE BOLLOCKS.
+            {Handlers can drain a BLOB in one operation (whether or not it completes in one - it may need multiple drain ops to drain fully)
+            so the synchronization mechanism stands.  Automatic reclaim of BLOB can be when consumer completes blob drain or consume.} 
+            </BOLLOCKS>]
+            Handlers can:
+            - Directly consume the BLOB data, or
+            [<BOLLOCKS> 
+            - Send the BLOBID to a client.  The client can use these data to download the complete BLOB data.
+              In order to consume the BLOB data directly, the handler must specify a BLOBManager parameter in its constructor, otherwise
+              it will not be able to access the BLOB instance.
+              {Don't do this.  We can consume BLOB data in one-operation chunks which can be synchronized if the BLOB is multi-recipient.
+              Reduce complexity!  Send BLOB data from the handler to its client.}
+            </BOLLOCKS>]
+            - Drain the BLOB data in chunks.  BLOB can automatically be reclaimed if a drain operation gets to the end of the BLOB buffer data.
+              Could also reclaim manually but that means extra work.  If we're draining a BLOB then we're not CONSUMING it so there seems no sense
+              in having it around longer than the point it has been drained fully.
+          
+Calling handler with data:
+
+  Handlers can be called with 'Normal' or BLOB data.  The process for handling these two types of message data are different.
+  Both types of data should be CONSUMEable and DRAINable, in effect implementing a ConsumeDrainMessageBlockProvider interface which allows both operations.
+  'Normal' message data:
+    - Consumed fully by handler:          DefinedMessageBlockConsumeProvider sub-interface of ConsumeDrainMessageBlockProvider called to consume in one go.
+    - Drained to handler client channel:  DrainableChannelBuffer sub-interface used.  If not all data drained then the handler will have to intervene - following
+                                          this call the incoming data will not be available.  In this case, the DefinedMessageBlockConsumeProvider sub-interface can 
+                                          be used to consume the rest of the message data to a buffer i.e. using BlockBufferBase.produceData(WriteBlockHandler) 
+                                          where the WriteBlockHandler source is the SequentialBlockMessageReader (which implements WriteBlockHandler) that is 
+                                          accessible by calling the DefinedMessageBlockConsumeProvider method.
+  BLOB message data:
+    - Consumed fully by handler:          DefinedMessageBlockConsumeProvider sub-interface of ConsumeDrainMessageBlockProvider called to consume in one go.
+    - Drained to handler client channel:  The BLOB is persistent where incoming 'normal' data are not.  Therefore, if a BLOBConsumer instance (representing a
+                                          BLOB instance and the recipient - so that its BLOBManager can be notified transparently when the data are fully 
+                                          consumed by the recipient) is passed as a parameter, then it can be repeatedly drained until complete.  Any other
+                                          BLOB or normal data coming in during this period would need to be buffered so that it could be sent to the client
+                                          connection once the BLOB drain operation had completed.  A handler standard buffer class would be useful here, so that
+                                          both normal and BLOB data can be buffered in order.  BLOB data may need to be stored in a map against an ID which
+                                          is assigned to the BLOB.  Content could be something like [BLOB_Type][long:0][NORM_Type][...data...][BLOB_Type][long:1]...
+                                          
+                                          
+  
+LifeCycle:
+ 
+  Produced by handler: P2P or ODA push
+  P2P:
+    Produce BLOB from handler in one operation.  Type is single target BLOB - dispose automatically when consumed.
+      <produced by handler calling BridgeMessageSender.sendBLOB()>
+    Prepare message - serialise BLOB ID to message.
+    Send to target.
+    Received by target SM in serial ID form.  Detect isBlob() flag in Bridge header.
+    Call target with message, handleBLOB(BLOBConsumer ...)
+    Handler consumes or drains BLOB to client channel.  This may take multiple calls.  BLOBConsumer instance can be retained and drained
+    over multiple calls.  The BLOB is a P2P type so once fully drained, it will be available for recycling.  The instance which contains the actual BLOB
+    will have internals nullified and invalid status set so it can't be used again. 
+    <END>
+    
+  ODA push:
+    Produce BLOB from handler in one operation.
+      <produced by handler calling PushODASender.pushBLOB() as opposed to PushODASender.pushMessage()> {22/10/20 - PushODASender doesn't exist yet!}
+      Type is multi-target BLOB:  List of SM recipients included in the BLOB object - OR - 
+      Type is single target BLOB: Single recipient BLOB.
+    ODA Manager determines recipients for ODAR.  (for this example, assume multi-target BLOB.)
+    ODA Manager creates Bridge message for each recipient SM-like object, serialises BLOB ID to each.  Sends messages.
+    Message is received by target SM-like object.  Note that for remote SMs only one message is sent to the remote proxy;
+    the BLOB contains a list of recipients for that process id. 
+    Every target within the process may be required to access the BLOB data simultaneously in order to consume or drain.
+      {Change BridgeTargetHandler to HamsterTargetHandler and include push updates.  Call specifies BLOBConsumer}
+    As P2P, each recipient holds a BLOBConsumer instance which points to an actual BLOB.  Access to drain/consume methods synchronized.
+    When all recipients have fully accessed BLOB data, BLOB can be recycled. 
+    
+  Transfer between processes:
+    Serialise BLOB including recipient HALO list.
+    When BLOB fully sent, remove all recipients from the BLOB. NO THE ODAR YOU IDIOT.
+      - multiple recipients are all out of process.  We won't consume BLOB data for each one; we'll send BLOB data once and we need to mark all of the
+        recipients as having been serviced.  BOLLOCKS only recipient sent to will be remote proxy.  Remote px on other side will have a list of SM-likes to
+        distribute the message to.  ODA push messages are only sent to SM level, one message each.  In the case of remote, we only send one message to remote px.
+        
+=====================================================================================================================
+
+BLOB implementation.
+---------------------------
+
+2 types of BLOB - single recipient and multi-recipient.
+
+FILL/PRODUCE same.  Can take multiple calls to fill.
+  Get FillBLOBConstructor or ProduceBLOBConstructor instance from BLOBManager.  This will allocate a BLOB and an id.
+  FillBLOBConstructor:  one or more calls to fill data.  Subsequent calls are appended.
+  
+  
+  
+BORN
+  As above.
+LIVE
+  As above.
+DIE
+  Explicit invalidation/reclaim call by SM.  Handlers never actually get the BLOB directly; only a means of consuming or draining BLOB data.
+  SM may (in case of ODA push) need to replay the same BLOB to multiple handlers.  The SM can only finish the BLOB (there may be multiple SM recipients)
+  when all handlers have fully consumed, so SM should be given the responsibility of ending the BLOB instance.
+  
+  
