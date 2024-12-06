@@ -28,5 +28,12 @@ public interface SocketChannelController extends BiDirectionalChannelController
    * @return the liberated socket channel.
    */
   public SocketChannel liberate();
-  
+
+  /**
+   * <p>This method can be called from a different thread to the communication application thread.
+   * It allows a connection to wake up the comm loop in response to a requirement to execute communication
+   * actions, for example (and typically) to send data that have been produced by a different thread.</p>
+   */
+  public void nudge();
+
 }

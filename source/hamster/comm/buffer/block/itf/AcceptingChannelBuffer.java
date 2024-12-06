@@ -14,7 +14,7 @@ public interface AcceptingChannelBuffer
    * <p>If there are bytes in the OS channel buffer that are ready to be consumed, but the target buffer has no more space, 
    * then a non-blocking environment could have a problem in that 0 bytes were transferred from a channel because it has readable 
    * data and the target buffer can not accept the transfer.  OP_READ would still be ON so we could go into a thread spin until data 
-   * have been consumed from the target buffer and the accepting transfer can be satisfiedd.
+   * have been consumed from the target buffer and the accepting transfer can be satisfied.
    * 
    * @return true if the buffer can accept a transfer of at least one byte.
    */  

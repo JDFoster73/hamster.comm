@@ -42,15 +42,18 @@ import hamster.comm.server.listener.WriteChannelHandler;
  * <p>
  * Finally, the instance acts as a {@link ReadTransferHandler} which allows
  * incoming channel data to be read without exposing the selector or channel
- * mechanism. Callers provide a {@link ChannelSourceBufferReader} to the
- * {@link #transferChannelReadData(ChannelSourceBufferReader)} method which is
- * filled with incoming channel data.
+ * mechanism.
  * 
  * @author jdf19
  *
  */
 class SocketChannelReadWriteHandler implements ReadTargetListener, WriteChannelHandler, SocketChannelController, BaseChannelOptionController
 {
+  /**
+   * Allow the communication thread selector to be nudged awake.
+   */
+  //private final NudgeController nudgeController;
+
   /**
    * The user-defined listener callback interface. It will be called with socket
    * channel events.
@@ -375,7 +378,16 @@ class SocketChannelReadWriteHandler implements ReadTargetListener, WriteChannelH
     // Return the channel object.
     return channel;
   }
-  
+
+  /**
+   * {@inheritDoc}
+   */
+  @Override
+  public void nudge()
+  {
+    selKey.selector().wakeup();
+  }
+
   /**
    * {@inheritDoc}
    */

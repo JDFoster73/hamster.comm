@@ -32,10 +32,10 @@ public class GeneralPipelineBuffer implements MessageBlockTransferProvider, Mess
    * <p>Buffer object that is wrapped by this utility class.
    */
   private final BlockBufferBase delegateBuffer;
-  
+
   /**
    * Create an instance of the general pipeline buffer with the given factory and logger instances.
-   *  
+   *
    * @param bufferFact the buffer factory to use when creating an instance of the general pipeline buffer.
    * @param logger the logger to use for debugging buffer operations.
    */
@@ -46,7 +46,7 @@ public class GeneralPipelineBuffer implements MessageBlockTransferProvider, Mess
 
   /**
    * Create an instance of the general pipeline buffer with the given factory instance.  No logger will be used for debugging buffer operations.
-   * 
+   *
    * @param bufferFact the buffer factory to use when creating an instance of the general pipeline buffer.
    */
   public GeneralPipelineBuffer(GrowUpdateExpandableBufferFactory bufferFact)
@@ -57,7 +57,7 @@ public class GeneralPipelineBuffer implements MessageBlockTransferProvider, Mess
   /**
    * Create an instance of the general pipeline buffer with the given factory and logger instances.  A buffer
    * id string is also specified which will be appended to the logs.
-   * 
+   *
    * @param bufferFact the buffer factory to use when creating an instance of the general pipeline buffer.
    * @param bufferId buffer id to use in logging operations.
    * @param logger the logger to use for debugging buffer operations.
@@ -73,7 +73,7 @@ public class GeneralPipelineBuffer implements MessageBlockTransferProvider, Mess
   @Override
   public int produceFromHandler(WriteBlockHandler writeProc)
   {
-    return delegateBuffer.produceData(writeProc);    
+    return delegateBuffer.produceData(writeProc);
   }
 
   /**
@@ -82,7 +82,7 @@ public class GeneralPipelineBuffer implements MessageBlockTransferProvider, Mess
   @Override
   public boolean consumeToHandler(ReadableCompletionBlockHandler callback)
   {
-    return delegateBuffer.consumeData(callback);    
+    return delegateBuffer.consumeData(callback);
   }
 
   /**
@@ -94,7 +94,7 @@ public class GeneralPipelineBuffer implements MessageBlockTransferProvider, Mess
     //Run the block calculator.
     delegateBuffer.runReadableBlockCalculation(callback);
   }
-    
+
 
   /**
    * {@inheritDoc}
@@ -131,7 +131,7 @@ public class GeneralPipelineBuffer implements MessageBlockTransferProvider, Mess
   {
     return delegateBuffer.fillData(channel, maxBytes);
   }
-  
+
   /**
    * {@inheritDoc}
    */
@@ -189,7 +189,7 @@ public class GeneralPipelineBuffer implements MessageBlockTransferProvider, Mess
   /**
    * <p>
    * Clear ALL data in buffer and completely re-initialise.
-   * 
+   *
    * @return this instance reference.
    */
   public GeneralPipelineBuffer clearAll()
@@ -214,7 +214,7 @@ public class GeneralPipelineBuffer implements MessageBlockTransferProvider, Mess
   {
     return delegateBuffer.getCapacity();
   }
-  
+
   @Override
   public String toString()
   {

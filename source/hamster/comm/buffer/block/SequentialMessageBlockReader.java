@@ -607,6 +607,19 @@ public class SequentialMessageBlockReader implements WriteBlockHandler
   }
 
   /**
+   * This method will return true if at least one byte can be read from the buffer.
+   *
+   * @return the number of readable bytes remaining.
+   */
+  public boolean hasRemainingBytesInBlock()
+  {
+    //Return buffer remaining bytes.  Limit has been set on the message block
+    //so number of remaining bytes in block is simply the number of bytes between
+    //the position and the limit of the buffer.
+    return thisBuffer.remaining() > 0;
+  }
+
+  /**
    * This gives a fixed value of the total number of bytes in the block being processed.
    *  
    *  @return the total number of bytes that have been available to read

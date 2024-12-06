@@ -19,7 +19,7 @@ class SocketChannelConnectHandler
   private final Logger logger;
   
   private final SocketChannel sc;
-  
+
 //  private boolean channelClosed = false;
   
   SocketChannelConnectHandler(SelectionKey registeredKey, SocketChannel sc, ClientSocketChannelListener channelListener, Logger logger)
@@ -31,6 +31,7 @@ class SocketChannelConnectHandler
     
     this.channelListener = channelListener;
     this.logger = logger;
+
   }
   
   void handleChannelConnectEvent()
