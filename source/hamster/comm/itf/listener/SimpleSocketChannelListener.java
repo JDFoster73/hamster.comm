@@ -9,8 +9,13 @@ import hamster.comm.itf.controller.SocketChannelController;
  */
 public abstract class SimpleSocketChannelListener implements SocketChannelListener
 {
+  protected SocketChannelController channelController;
+
   @Override
-  public abstract void initController(SocketChannelController controller);
+  public void initController(SocketChannelController controller)
+  {
+    this.channelController = controller;
+  }
 
   @Override
   public void isClosing()

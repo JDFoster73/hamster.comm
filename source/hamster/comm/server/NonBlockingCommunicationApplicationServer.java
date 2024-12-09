@@ -75,20 +75,6 @@ public final class NonBlockingCommunicationApplicationServer implements Runnable
    * this dummy instance and ignored.
    */
   private CommLoopInteractor commLoopInteractor = new DummyInteractor();
-
-  /**
-   * <p>
-   * Dummy reprocess consumer by default.
-   */
-  //TODO REMOVE
-  //private ReprocessConsumer reprocessConsumer = new ReprocessConsumer();
-  
-  //TODO REMOVE
-  /**
-   * The reprocess flag is set if the reprocessReceivedData(...) method has been
-   * called.
-   */
-  //private boolean reprocess = false;
   
   /**
    * <p>This consumer receives the contents of the channel selection key map values.  For each attachment that
@@ -97,9 +83,14 @@ public final class NonBlockingCommunicationApplicationServer implements Runnable
   private LoopEndConsumer loopEndConsumer = new LoopEndConsumer();
   
   /**
-   * CLOSES THE THREAD LOOP WHEN TRUE.
+   * CLOSES THE THREAD LOOP WHEN TRUE.  Called from inside the application thread.
    */
-  private boolean close = false;
+  private volatile boolean internalClose = false;
+
+  /**
+   * Called from outside the application thread.  Notifies the application instance that an external shutdown is required.
+   */
+  private volatile boolean externalClose = false;
 
   /**
    * <p>The communications application that should run inside this thread.
@@ -147,16 +138,16 @@ public final class NonBlockingCommunicationApplicationServer implements Runnable
     application.registerAppController(new InternalComm());
     
     // This is a daemon thread. It will close automatically when the system closes.
-    while (!close)
+    while (!internalClose)
     {
-      //TODO REMOVE
-//      // Reprocess.
-//      if (reprocess)
-//      {
-//        reprocess = false;
-//        this.selector.keys().forEach(reprocessConsumer);
-//      }
-      
+      //Process external shutdown required command.
+      if(externalClose)
+      {
+        application.externalShutdownCommand();
+        //Don't process again.
+        externalClose = false;
+      }
+
       // Wait for the next wakeup time.
       int readyKeys = 0;
       try
@@ -261,7 +252,19 @@ public final class NonBlockingCommunicationApplicationServer implements Runnable
       e.printStackTrace();
     }
   }
-  
+
+  /**
+   *
+   */
+  public void externalApplicationShutdownRequired()
+  {
+    //Set the volatile external shutdown flag.
+    externalClose = true;
+
+    //Nudge the selector so that the loop can process this external shutdown command.
+    selector.wakeup();
+  }
+
   /**
    * Scan the selector selection key attachments for outgoing channel handlers. If
    * any of these handlers has a buffer with outgoing data, then set the writable
@@ -557,7 +560,7 @@ public final class NonBlockingCommunicationApplicationServer implements Runnable
     public CommLoopCloser getCommLoopCloser()
     {
       return () -> {
-        close = true;
+        internalClose = true;
       };
     }
     

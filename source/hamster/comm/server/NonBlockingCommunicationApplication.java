@@ -19,4 +19,9 @@ public interface NonBlockingCommunicationApplication
    * @param controller the application controller.
    */
   public void registerAppController(CommunicationApplicationController controller);
+
+  /**
+   * An external shutdown required command has been received by the application communication thread server.
+   */
+  public void externalShutdownCommand();
 }

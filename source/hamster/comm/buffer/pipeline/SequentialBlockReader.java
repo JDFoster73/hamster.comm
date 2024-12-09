@@ -32,9 +32,11 @@ public class SequentialBlockReader
    */
   private final StringBuilder charStringBuilder = new StringBuilder();
 
-  //private int blockStartPointer;
-
-  //private int blockLength;
+  /**
+   * Block start pointer.  Immediately prior to a block being consumed, this value will be set to the start index
+   * of consumable data in the internal buffer.
+   */
+  private int blockStartPointer;
 
   /**
    * Create a <code>SequentialBufferReader</code> instance with the given underlying ByteBuffer.
@@ -59,11 +61,11 @@ public class SequentialBlockReader
    * <p>Start processing a message block.  Save the start position for calculation purposes.  The owning
    * caller will already have set up the buffer position and limit prior to calling this method.
    */
-//  void setBlock(int blockStartPos, int blockLength)
-//  {
-//    this.blockStartPointer = blockStartPos;
-//    this.blockLength = blockLength;
-//  }
+  SequentialBlockReader setBlock()
+  {
+    this.blockStartPointer = thisBuffer.position();
+    return this;
+  }
 
   /**
    * <p>Consume a <code>double</code> datatype.  Enough data must be left in the block to complete this call or an exception will be thrown.
@@ -317,5 +319,15 @@ public class SequentialBlockReader
     // The byte buffer has been set up with the position at the start of the message block and the limit at the
     // end of the message block.  Use these values to compute the return value.
     return thisBuffer.position();// - this.blockStart;
+  }
+
+  /**
+   * Return the number of consumed bytes.
+   *
+   * @return
+   */
+  public int numberOfConsumedBytes()
+  {
+    return thisBuffer.position() - blockStartPointer;
   }
 }

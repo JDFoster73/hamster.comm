@@ -168,6 +168,12 @@ public class MultiThreadCommExchanger
         // Register established socket connection.
         controller.registerOpenSocket(connectedChannel, ccListener);
       }
+
+      @Override
+      public void externalShutdownCommand()
+      {
+
+      }
     };
     
     // Create non-blocking comm server.

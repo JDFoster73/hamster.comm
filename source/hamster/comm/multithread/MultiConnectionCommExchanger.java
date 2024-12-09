@@ -102,6 +102,12 @@ public class MultiConnectionCommExchanger
         // Set loop interactor.
         controller.setLoopInteractor(new ClientLoopInteractor());
       }
+
+      @Override
+      public void externalShutdownCommand()
+      {
+
+      }
     };
 
     // Create non-blocking comm server.

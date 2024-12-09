@@ -12,9 +12,8 @@ import java.nio.channels.WritableByteChannel;
 /**
  * <p>The general pipeline buffer simply buffers data bytes.  Data can be consumed in defined block using methods from the
  * {@link MessageBlockConsumeProvider}, {@link WholeBufferConsumeProvider} and {@link MessageBlockCalculateProvider} interfaces.
- * 
- * @author jdf19
  *
+ * @author jdf19
  */
 public class PipelineBuffer implements FillableChannelBuffer, DrainableChannelBuffer
 {
@@ -38,6 +37,11 @@ public class PipelineBuffer implements FillableChannelBuffer, DrainableChannelBu
 
   private int produceIndex = 0;
 
+  //Only one operation can take place at once.  Re-entrant calls are not permitted.
+  //Otherwise the complexity gets very difficult to manage and this library wants to
+  //keep things simple.
+  private boolean operationLock = false;
+
   /**
    * Create an instance of the general pipeline buffer with the given factory and logger instances.
    *
@@ -54,138 +58,265 @@ public class PipelineBuffer implements FillableChannelBuffer, DrainableChannelBu
 
   public PipelineBuffer produceFromBytes(byte[] bytesToTransferToThisBuffer)
   {
-    //Set to produce.
-    setProduceMode();
+    try
+    {
+      //Check lock.
+      checkOperationLock();
 
-    //Add the bytes to the internal buffer.
-    internalBuffer.put(bytesToTransferToThisBuffer);
+      //Set to produce.
+      setProduceMode();
 
-    //Update the produce index.
-    produceIndex = internalBuffer.position();
+      //Add the bytes to the internal buffer.
+      internalBuffer.put(bytesToTransferToThisBuffer);
 
-    //Return this.
-    return this;
+      //Update the produce index.
+      produceIndex = internalBuffer.position();
+
+      //Return this.
+      return this;
+    }
+    finally
+    {
+      //Release lock.
+      releaseOperationLock();
+    }
   }
 
+  /**
+   * Transfer the raw byte data from the source array into this buffer instance.  There must be enough space in the
+   * internal buffer to be able to transfer all bytes from the source array.
+   *
+   * @param bytesToTransferToThisBuffer
+   * @param startIx
+   * @param length
+   * @return
+   */
   public PipelineBuffer produceFromBytes(byte[] bytesToTransferToThisBuffer, int startIx, int length)
   {
-    //Set to produce.
-    setProduceMode();
+    try
+    {
+      //Check lock.
+      checkOperationLock();
 
-    //Add the bytes to the internal buffer.
-    internalBuffer.put(bytesToTransferToThisBuffer, startIx ,length);
+      //Set to produce.
+      setProduceMode();
 
-    //Update the produce index.
-    produceIndex = internalBuffer.position();
+      //Add the bytes to the internal buffer.
+      internalBuffer.put(bytesToTransferToThisBuffer, startIx, length);
 
-    //Return this.
-    return this;
+      //Update the produce index.
+      produceIndex = internalBuffer.position();
+
+      //Return this.
+      return this;
+    }
+    finally
+    {
+      //Release lock.
+      releaseOperationLock();
+    }
   }
 
+  /**
+   * Produce data from a {@link PipelineProducer} callback.  This callback is used to produce structured data into
+   * this buffer instance.
+   *
+   * @param producer
+   * @return
+   */
   public PipelineBuffer produceData(PipelineProducer producer)
   {
-    //Set to produce.
-    setProduceMode();
+    try
+    {
+      //Check lock.
+      checkOperationLock();
 
-    //Produce to the given reference.
-    producer.produceToBuffer(internalWriter);
+      //Set to produce.
+      setProduceMode();
 
-    //Update the produce index.
-    produceIndex = internalBuffer.position();
+      //Produce to the given reference.
+      producer.produceToBuffer(internalWriter);
 
-    //Return this.
-    return this;
+      //Update the produce index.
+      produceIndex = internalBuffer.position();
+
+      //Return this.
+      return this;
+    }
+    finally
+    {
+      //Release lock.
+      releaseOperationLock();
+    }
   }
 
   public PipelineBuffer produceFromByteBuffer(ByteBuffer producer)
   {
-    //Set to produce.
-    setProduceMode();
+    try
+    {
+      //Check lock.
+      checkOperationLock();
 
-    //Produce to the given reference.
-    internalBuffer.put(producer);
+      //Set to produce.
+      setProduceMode();
 
-    //Update the produce index.
-    produceIndex = internalBuffer.position();
+      //Produce to the given reference.
+      internalBuffer.put(producer);
 
-    //Return this.
-    return this;
+      //Update the produce index.
+      produceIndex = internalBuffer.position();
+
+      //Return this.
+      return this;
+    }
+    finally
+    {
+      //Release lock.
+      releaseOperationLock();
+    }
   }
 
   public PipelineBuffer produceDataFromPipelineBuffer(PipelineBuffer producer)
   {
-//    //Set to produce.
-//    setProduceMode();
-//
-//    //Produce to the given reference.
-//    producer.produceToBuffer(internalWriter);
-//
-//    //Update the produce index.
-//    produceIndex = internalBuffer.position();
+    try
+    {
+      //Check lock.
+      checkOperationLock();
 
-//    //Return this.
-//    return this;
+      //Set to consume mode.
+      setProduceMode();
 
-    throw new UnsupportedOperationException();
+      //Produce the data to this buffer instance.
+      producer.transferToTargetBuffer(this);
+
+      //Update the produce index.
+      produceIndex = internalBuffer.position();
+
+      //Return this.
+      return this;
+    }
+    finally
+    {
+      //Release lock.
+      releaseOperationLock();
+    }
+
+  }
+
+  private void transferToTargetBuffer(PipelineBuffer target)
+  {
+    try
+    {
+      //Check lock.
+      checkOperationLock();
+
+      //Target is already in consume mode.  Put this buffer into produce mode.
+      setConsumeMode();
+
+      //Transfer as much data as possible from this buffer to the target buffer.
+      target.internalBuffer.put(internalBuffer);
+
+      //Update the consume index.
+      consumeIndex = internalBuffer.position();
+    }
+    finally
+    {
+      //Release lock.
+      releaseOperationLock();
+    }
   }
 
   public PipelineBuffer consumeBytes(byte[] bytesToTransferToThisBuffer, int startIx, int length)
   {
-    //Set to consume.
-    setConsumeMode();
+    try
+    {
+      //Check lock.
+      checkOperationLock();
 
-    //Consume the requested data to the given byte buffer.
-    internalBuffer.get(bytesToTransferToThisBuffer, startIx, length);
+      //Set to consume.
+      setConsumeMode();
 
-    //Update the produce index.
-    consumeIndex += length;
+      //Consume the requested data to the given byte buffer.
+      internalBuffer.get(bytesToTransferToThisBuffer, startIx, length);
 
-    //Return this.
-    return this;
+      //Update the produce index.
+      consumeIndex += length;
+
+      //Return this.
+      return this;
+    }
+    finally
+    {
+      //Release lock.
+      releaseOperationLock();
+    }
   }
 
   public PipelineBuffer consumeBytes(byte[] bytesToTransferToThisBuffer)
   {
-    //Set to consume.
-    setConsumeMode();
+    try
+    {
+      //Check lock.
+      checkOperationLock();
 
-    //Consume the requested data to the given byte buffer.
-    internalBuffer.get(bytesToTransferToThisBuffer);
+      //Set to consume.
+      setConsumeMode();
 
-    //Update the produce index.
-    consumeIndex += bytesToTransferToThisBuffer.length;
+      //Consume the requested data to the given byte buffer.
+      internalBuffer.get(bytesToTransferToThisBuffer);
 
-    //Return this.
-    return this;
+      //Update the produce index.
+      consumeIndex += bytesToTransferToThisBuffer.length;
+
+      //Return this.
+      return this;
+    }
+    finally
+    {
+      //Release lock.
+      releaseOperationLock();
+    }
   }
 
   public int consumeData(PipelineConsumer consumer)
   {
-    //Set to consume.
-    setConsumeMode();
+    try
+    {
+      //Check lock.
+      checkOperationLock();
 
-    //Set the start position.  If the block data are not consumed, we will return to this buffer position.
-    int startBufferPosition = internalBuffer.position();
+      //Set to consume.
+      setConsumeMode();
 
-    //Consume.
-    int blockDataWereConsumed = consumer.consumeFromBuffer(internalReader);
+      //Set the start position.  If the block data are not consumed, we will return to this buffer position.
+      int startBufferPosition = internalBuffer.position();
 
-    //Make sure they aren't doing anything nefarious or foolish.
-    if((blockDataWereConsumed < 0) || (blockDataWereConsumed > size())) throw new IllegalCallerException();//TODO message
+      //Consume.
+      int blockDataWereConsumed = consumer.consumeFromBuffer(internalReader.setBlock());
 
-    //Set the position.
-    internalBuffer.position(startBufferPosition + blockDataWereConsumed);
-    //Update the consume index.
-    consumeIndex = internalBuffer.position();
+      //Make sure they aren't doing anything nefarious or foolish.
+      if ((blockDataWereConsumed < 0) || (blockDataWereConsumed > size()))
+        throw new IllegalCallerException();//TODO message
 
-    //Return the block consumed status.
-    return blockDataWereConsumed;
+      //Set the position.
+      internalBuffer.position(startBufferPosition + blockDataWereConsumed);
+      //Update the consume index.
+      consumeIndex = internalBuffer.position();
+
+      //Return the block consumed status.
+      return blockDataWereConsumed;
+    }
+    finally
+    {
+      //Release lock.
+      releaseOperationLock();
+    }
   }
 
   protected void setProduceMode()
   {
     //If not already in produce mode, compact the buffer and flip it so that new data are written to the end.
-    if(!produce)
+    if (!produce)
     {
       reclaim();
       produce = true;
@@ -195,7 +326,7 @@ public class PipelineBuffer implements FillableChannelBuffer, DrainableChannelBu
   protected void setConsumeMode()
   {
     //If not already in consume mode, flip the buffer so that existing data are read from the beginning.
-    if(produce)
+    if (produce)
     {
       internalBuffer.limit(produceIndex);
       internalBuffer.position(consumeIndex);
@@ -229,46 +360,68 @@ public class PipelineBuffer implements FillableChannelBuffer, DrainableChannelBu
   @Override
   public int drainBufferToChannel(WritableByteChannel channel) throws IOException
   {
-    //Set to produce.
-    setConsumeMode();
-
-    //Get the channel data into the buffer.
-    int i = channel.write(internalBuffer);
-
-    if(i > 0)
+    try
     {
-      //Update the produce index.
-      consumeIndex += i;
-    }
+      //Check lock.
+      checkOperationLock();
 
-    //Return the number of bytes drained.
-    return i;
+      //Set to produce.
+      setConsumeMode();
+
+      //Get the channel data into the buffer.
+      int i = channel.write(internalBuffer);
+
+      if (i > 0)
+      {
+        //Update the produce index.
+        consumeIndex += i;
+      }
+
+      //Return the number of bytes drained.
+      return i;
+    }
+    finally
+    {
+      //Release lock.
+      releaseOperationLock();
+    }
   }
 
   @Override
   @Deprecated
   public int drainBufferToChannel(WritableByteChannel channel, int maxBytesToSend) throws IOException
   {
-    //Set to produce.
-    setConsumeMode();
-
-    //Further update the buffer limit to reflect the maxBytesToSend parameter.
-    internalBuffer.limit(Math.min(internalBuffer.limit(), consumeIndex + maxBytesToSend));
-
-    //Get the channel data into the buffer.
-    int i = channel.write(internalBuffer);
-
-    if(i > 0)
+    try
     {
-      //Update the produce index.
-      consumeIndex += i;
+      //Check lock.
+      checkOperationLock();
+
+      //Set to produce.
+      setConsumeMode();
+
+      //Further update the buffer limit to reflect the maxBytesToSend parameter.
+      internalBuffer.limit(Math.min(internalBuffer.limit(), consumeIndex + maxBytesToSend));
+
+      //Get the channel data into the buffer.
+      int i = channel.write(internalBuffer);
+
+      if (i > 0)
+      {
+        //Update the produce index.
+        consumeIndex += i;
+      }
+
+      //Remove the added limit - put the buffer dimensions back to normal.
+      internalBuffer.limit(produceIndex);
+
+      //Return the number of bytes drained.
+      return i;
     }
-
-    //Remove the added limit - put the buffer dimensions back to normal.
-    internalBuffer.limit(produceIndex);
-
-    //Return the number of bytes drained.
-    return i;
+    finally
+    {
+      //Release lock.
+      releaseOperationLock();
+    }
   }
 
   @Override
@@ -280,45 +433,67 @@ public class PipelineBuffer implements FillableChannelBuffer, DrainableChannelBu
   @Override
   public int fromChannel(ReadableByteChannel channel) throws IOException
   {
-    //Set to produce.
-    setProduceMode();
-
-    //Get the channel data into the buffer.
-    int i = channel.read(internalBuffer);
-
-    if(i > 0)
+    try
     {
-      //Update the produce index.
-      produceIndex += i;
-    }
+      //Check lock.
+      checkOperationLock();
 
-    //Return the number of bytes filled.
-    return i;
+      //Set to produce.
+      setProduceMode();
+
+      //Get the channel data into the buffer.
+      int i = channel.read(internalBuffer);
+
+      if (i > 0)
+      {
+        //Update the produce index.
+        produceIndex += i;
+      }
+
+      //Return the number of bytes filled.
+      return i;
+    }
+    finally
+    {
+      //Release lock.
+      releaseOperationLock();
+    }
   }
 
   @Override
   public int fromChannel(ReadableByteChannel channel, int maxBytesToReceive) throws IOException
   {
-    //Set to produce.
-    setProduceMode();
-
-    //Set the
-    internalBuffer.limit(Math.min(internalBuffer.capacity(), produceIndex + maxBytesToReceive));
-
-    //Get the channel data into the buffer.
-    int i = channel.read(internalBuffer);
-
-    if(i > 0)
+    try
     {
-      //Update the produce index.
-      produceIndex += i;
+      //Check lock.
+      checkOperationLock();
+
+      //Set to produce.
+      setProduceMode();
+
+      //Set the
+      internalBuffer.limit(Math.min(internalBuffer.capacity(), produceIndex + maxBytesToReceive));
+
+      //Get the channel data into the buffer.
+      int i = channel.read(internalBuffer);
+
+      if (i > 0)
+      {
+        //Update the produce index.
+        produceIndex += i;
+      }
+
+      //Set the limit back to the capacity.
+      internalBuffer.limit(internalBuffer.capacity());
+
+      //Return the number of bytes filled.
+      return i;
     }
-
-    //Set the limit back to the capacity.
-    internalBuffer.limit(internalBuffer.capacity());
-
-    //Return the number of bytes filled.
-    return i;
+    finally
+    {
+      //Release lock.
+      releaseOperationLock();
+    }
   }
 
   @Override
@@ -331,5 +506,45 @@ public class PipelineBuffer implements FillableChannelBuffer, DrainableChannelBu
   public boolean hasSpaceFor(int requiredBufferLen)
   {
     return requiredBufferLen <= (internalBuffer.capacity() - produceIndex);
+  }
+
+  /**
+   * Check the operation lock is false and set it to true if so.  If it is true then throw an illegal state
+   * exception.
+   *
+   * @throws IllegalStateException if there is a reentrant call.
+   */
+  private void checkOperationLock()
+  {
+    if (operationLock)
+    {
+      throw new IllegalStateException();
+    }
+
+    //Set the operation lock.
+    operationLock = true;
+  }
+
+  /**
+   * Release the operation lock.  It must be set or else we have an illegal state.
+   */
+  private void releaseOperationLock()
+  {
+    if (!operationLock)
+    {
+      throw new IllegalStateException();
+    }
+
+    //Set the operation lock.
+    operationLock = false;
+  }
+
+  /**
+   * True if there are no consumable data in the buffer.
+   * @return
+   */
+  public boolean isEmpty()
+  {
+    return produceIndex == consumeIndex;
   }
 }
