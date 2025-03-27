@@ -1,19 +1,19 @@
 package test.hamster.comm.buffer;
 
-import hamster.comm.buffer.pipeline.PipelineBuffer;
-import hamster.comm.buffer.pipeline.PipelineBufferFactory;
+import hamster.comm.buffer.PipelineBuffer;
+import hamster.comm.buffer.BufferFactory;
 import org.junit.Assert;
 import org.junit.Test;
 
 import java.nio.ByteOrder;
 
-public class PipelineBufferTest
+public class PipelineBufferReadTest
 {
   @Test
   public void simpleTest()
   {
     //Create the buffer instance.
-    PipelineBuffer buf = new PipelineBuffer(PipelineBufferFactory.getBufferFactory());
+    PipelineBuffer buf = new PipelineBuffer(BufferFactory.getDefaultBufferFactory());
     //Set to little endian.
     buf.setOrder(ByteOrder.LITTLE_ENDIAN);
 
@@ -30,7 +30,7 @@ public class PipelineBufferTest
     int stx = buf.consumeInt();
 
     //Consume the fields.
-    buf.startMessage(by.length);
+    buf.startReadMessage(by.length);
     char f1 = buf.consumeChar();
     int f2 = buf.consumeInt();
     byte f3 = buf.consumeByte();
@@ -38,7 +38,7 @@ public class PipelineBufferTest
     long f5 = buf.consumeLong();
 
     //Complete the message.
-    buf.completeMessage();
+    buf.completeReadMessage();
 
     //Get end.
     int etx = buf.consumeInt();
@@ -50,7 +50,7 @@ public class PipelineBufferTest
   public void partialMessageConsumeTest()
   {
     //Create the buffer instance.
-    PipelineBuffer buf = new PipelineBuffer(PipelineBufferFactory.getBufferFactory());
+    PipelineBuffer buf = new PipelineBuffer(BufferFactory.getDefaultBufferFactory());
     //Set to little endian.
     buf.setOrder(ByteOrder.LITTLE_ENDIAN);
 
@@ -67,14 +67,14 @@ public class PipelineBufferTest
     int stx = buf.consumeInt();
 
     //Consume the fields.
-    buf.startMessage(by.length);
+    buf.startReadMessage(by.length);
     char f1 = buf.consumeChar();
     int f2 = buf.consumeInt();
     byte f3 = buf.consumeByte();
     int f4 = buf.consumeInt();
 
     //Complete the message.
-    buf.completeMessage();
+    buf.completeReadMessage();
 
     //Get end.
     int etx = buf.consumeInt();
@@ -86,7 +86,7 @@ public class PipelineBufferTest
   public void illegalMessageBlockOpTest()
   {
     //Create the buffer instance.
-    PipelineBuffer buf = new PipelineBuffer(PipelineBufferFactory.getBufferFactory());
+    PipelineBuffer buf = new PipelineBuffer(BufferFactory.getDefaultBufferFactory());
     //Set to little endian.
     buf.setOrder(ByteOrder.LITTLE_ENDIAN);
 
@@ -94,7 +94,7 @@ public class PipelineBufferTest
     //Start
     buf.produceInt(0x66554433);
 
-    buf.startMessage(4);
+    buf.startReadMessage(4);
 
     try
     {

@@ -1,26 +1,22 @@
 package test.hamster.comm.buffer;
 
-import hamster.comm.buffer.pipeline.PipelineBufferFactory;
+import hamster.comm.buffer.BufferFactory;
 
-import org.junit.Assert;
 import org.junit.BeforeClass;
 import org.junit.Test;
 
-import javax.crypto.Cipher;
 import javax.crypto.NoSuchPaddingException;
-import javax.crypto.spec.SecretKeySpec;
 import java.security.InvalidKeyException;
-import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 
 public class BlockBufferTest
 {
-  private static PipelineBufferFactory bufferFactory;
+  private static BufferFactory bufferFactory;
 
   @BeforeClass
   public static void beforeClass()
   {
-    bufferFactory = PipelineBufferFactory.getBufferFactory();
+    bufferFactory = BufferFactory.getDefaultBufferFactory();
   }
 
   @Test

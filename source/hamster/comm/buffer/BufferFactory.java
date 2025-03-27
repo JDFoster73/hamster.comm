@@ -1,14 +1,20 @@
-package hamster.comm.buffer.pipeline;
+package hamster.comm.buffer;
 
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 
-public class PipelineBufferFactory
+/**
+ * Simple class for creating ByteBuffer instances which have specified capacity, order and directness.
+ */
+public class BufferFactory
 {
+  //The capacity to initialise buffer instances with.
   private int size;
 
+  //The order to initialise buffer instances with.
   private ByteOrder order;
 
+  //The directness to initialise buffer instances with.
   private boolean direct;
 
   /**
@@ -16,7 +22,7 @@ public class PipelineBufferFactory
    *
    * @param initSize
    */
-  private PipelineBufferFactory(int initSize, boolean direct)
+  private BufferFactory(int initSize, boolean direct)
   {
     this.size = initSize;
     this.direct = direct;
@@ -25,29 +31,29 @@ public class PipelineBufferFactory
   /**
    * Private no-args constructor so this class can't be instanced other than calling the static method.
    */
-  private PipelineBufferFactory(int initSize)
+  private BufferFactory(int initSize)
   {
     this.size = initSize;
   }
 
-  public static PipelineBufferFactory getBufferFactory()
+  public static BufferFactory getDefaultBufferFactory()
   {
-    return new PipelineBufferFactory(2000);
+    return new BufferFactory(2000);
   }
 
-  public PipelineBufferFactory configureOrder(ByteOrder order)
+  public BufferFactory configureOrder(ByteOrder order)
   {
     this.order = order;
     return this;
   }
 
-  public PipelineBufferFactory setSize(int bytes)
+  public BufferFactory setSize(int bytes)
   {
     this.size = bytes;
     return this;
   }
 
-  public PipelineBufferFactory setDirectness(boolean directness)
+  public BufferFactory setDirectness(boolean directness)
   {
     this.direct = directness;
     return this;

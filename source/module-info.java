@@ -13,8 +13,6 @@ module hamster.comm
 
   exports hamster.comm.buffer;
 
-  exports hamster.comm.buffer.pipeline;
-  
   exports hamster.comm.communication;
   exports hamster.comm.communication.sockopts;
 

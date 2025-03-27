@@ -1,7 +1,4 @@
-package hamster.comm.buffer.pipeline;
-
-import hamster.comm.buffer.DrainableChannelBuffer;
-import hamster.comm.buffer.FillableChannelBuffer;
+package hamster.comm.buffer;
 
 import java.io.IOException;
 import java.nio.BufferUnderflowException;
@@ -15,13 +12,8 @@ import java.nio.channels.WritableByteChannel;
  *
  * @author jdf19
  */
-public class PipelineBuffer implements FillableChannelBuffer, DrainableChannelBuffer
+public class PipelineBuffer extends BaseBuffer implements FillableChannelBuffer, DrainableChannelBuffer
 {
-  /**
-   * <p>Buffer object that is wrapped by this utility class.
-   */
-  protected final ByteBuffer internalBuffer;
-
   //If the produce flag is true then the buffer is to be filled.
   //If the flag is false, the buffer is to be consumed.
   //As the buffer is empty initiall and there is nothing to consume, start off in produce mode.
@@ -31,15 +23,22 @@ public class PipelineBuffer implements FillableChannelBuffer, DrainableChannelBu
 
   private int produceIndex = 0;
 
-  private int bufferLimit = 0;
+  //Set this to the internal buffer position at the end of the currently processed read message.
+  private int readMessageEndPosition = 0;
 
-  //Set this to the internal buffer position at the end of the currently processed message.
-  private int messageEndPosition = 0;
+  //Set this to the internal buffer position at the start of the currently processed write message.
+  private int writeMessageStartPosition = 0;
 
   //This is true if the owner has set a message block.  This operation must be completed before the buffer can be used
   //in any other way, or a runtime exception will be thrown.
-  private boolean operationLock = false;
+//  private boolean operationLock = false;
 //  private boolean messageActive = false;
+
+  //This is true if there is currently an operation lock for a read block operation.
+  private boolean readBlockActive = false;
+
+  //This is true if there is currently an operation lock for a write block operation.
+  private boolean writeBlockActive = false;
 
   //Only one operation can take place at once.  Re-entrant calls are not permitted.
   //Otherwise the complexity gets very difficult to manage and this library wants to
@@ -50,17 +49,18 @@ public class PipelineBuffer implements FillableChannelBuffer, DrainableChannelBu
    *
    * @param bufferFact the buffer factory to use when creating an instance of the general pipeline buffer.
    */
-  public PipelineBuffer(PipelineBufferFactory bufferFact)
+  public PipelineBuffer(BufferFactory bufferFact)
   {
-    internalBuffer = bufferFact.newBuffer();
+    //internalBuffer = bufferFact.newBuffer();
+    super(bufferFact);
   }
 
   public PipelineBuffer produceFromBytes(byte[] bytesToTransferToThisBuffer)
   {
     try
     {
-      //Check lock.
-      checkOperationLock();
+      //Check we can produce data - no read message is in construction.
+      //checkProducable();
 
       //Set to produce.
       setProduceMode();
@@ -77,7 +77,7 @@ public class PipelineBuffer implements FillableChannelBuffer, DrainableChannelBu
     finally
     {
       //Release lock.
-      releaseOperationLock();
+      //releaseOperationLock();
     }
   }
 
@@ -94,8 +94,8 @@ public class PipelineBuffer implements FillableChannelBuffer, DrainableChannelBu
   {
     try
     {
-      //Check lock.
-      checkOperationLock();
+      //Check we can produce data - no read message is in construction.
+      //checkProducable();
 
       //Set to produce.
       setProduceMode();
@@ -112,7 +112,7 @@ public class PipelineBuffer implements FillableChannelBuffer, DrainableChannelBu
     finally
     {
       //Release lock.
-      releaseOperationLock();
+      //releaseOperationLock();
     }
   }
 
@@ -120,8 +120,8 @@ public class PipelineBuffer implements FillableChannelBuffer, DrainableChannelBu
   {
     try
     {
-      //Check lock.
-      checkOperationLock();
+      //Check we can produce data - no read message is in construction.
+      //checkProducable();
 
       //Set to produce.
       setProduceMode();
@@ -138,7 +138,7 @@ public class PipelineBuffer implements FillableChannelBuffer, DrainableChannelBu
     finally
     {
       //Release lock.
-      releaseOperationLock();
+      //releaseOperationLock();
     }
   }
 
@@ -146,8 +146,8 @@ public class PipelineBuffer implements FillableChannelBuffer, DrainableChannelBu
   {
     try
     {
-      //Check lock.
-      checkOperationLock();
+      //Check we can produce data - no read message is in construction.
+      //checkProducable();
 
       //Set to consume mode.
       setProduceMode();
@@ -164,7 +164,7 @@ public class PipelineBuffer implements FillableChannelBuffer, DrainableChannelBu
     finally
     {
       //Release lock.
-      releaseOperationLock();
+      //releaseOperationLock();
     }
 
   }
@@ -173,8 +173,8 @@ public class PipelineBuffer implements FillableChannelBuffer, DrainableChannelBu
   {
     try
     {
-      //Check lock.
-      checkOperationLock();
+      //Check we can consume data - no write message is in construction.
+      //checkConsumable();
 
       //Target is already in consume mode.  Put this buffer into produce mode.
       setConsumeMode();
@@ -188,7 +188,7 @@ public class PipelineBuffer implements FillableChannelBuffer, DrainableChannelBu
     finally
     {
       //Release lock.
-      releaseOperationLock();
+      //releaseOperationLock();
     }
   }
 
@@ -196,8 +196,8 @@ public class PipelineBuffer implements FillableChannelBuffer, DrainableChannelBu
   {
     try
     {
-      //Check lock.
-      checkOperationLock();
+      //Check we can consume data - no write message is in construction.
+      //checkConsumable();
 
       //Target is already in consume mode.  Put this buffer into produce mode.
       setConsumeMode();
@@ -211,7 +211,7 @@ public class PipelineBuffer implements FillableChannelBuffer, DrainableChannelBu
     finally
     {
       //Release lock.
-      releaseOperationLock();
+      //();
     }
   }
 
@@ -219,8 +219,8 @@ public class PipelineBuffer implements FillableChannelBuffer, DrainableChannelBu
   {
     try
     {
-      //Check lock.
-      checkOperationLock();
+      //Check we can produce data - no read message is in construction.
+      //checkProducable();
 
       //Target is already in consume mode.  Put this buffer into produce mode.
       setProduceMode();
@@ -234,7 +234,7 @@ public class PipelineBuffer implements FillableChannelBuffer, DrainableChannelBu
     finally
     {
       //Release lock.
-      releaseOperationLock();
+      //releaseOperationLock();
     }
   }
   /**
@@ -252,8 +252,8 @@ public class PipelineBuffer implements FillableChannelBuffer, DrainableChannelBu
   {
     try
     {
-      //Check lock.
-      checkOperationLock();
+      //Check we can consume data - no write message is in construction.
+      //checkConsumable();
 
       //Set to consume.
       setConsumeMode();
@@ -270,7 +270,7 @@ public class PipelineBuffer implements FillableChannelBuffer, DrainableChannelBu
     finally
     {
       //Release lock.
-      releaseOperationLock();
+      //releaseOperationLock();
     }
   }
 
@@ -278,8 +278,8 @@ public class PipelineBuffer implements FillableChannelBuffer, DrainableChannelBu
   {
     try
     {
-      //Check lock.
-      checkOperationLock();
+      //Check we can consume data - no write message is in construction.
+      //checkConsumable();
 
       //Set to consume.
       setConsumeMode();
@@ -296,14 +296,17 @@ public class PipelineBuffer implements FillableChannelBuffer, DrainableChannelBu
     finally
     {
       //Release lock.
-      releaseOperationLock();
+      //releaseOperationLock();
     }
   }
 
   protected void setProduceMode()
   {
-    //Check lock.
-    //checkOperationLock();
+    //We can produce data if there is no read message in progress
+    if(readBlockActive)
+    {
+      throw new IllegalStateException("Read message active");
+    }
 
     //If not already in produce mode, compact the buffer and flip it so that new data are written to the end.
     if (!produce)
@@ -315,6 +318,12 @@ public class PipelineBuffer implements FillableChannelBuffer, DrainableChannelBu
 
   protected void setConsumeMode()
   {
+    //We can consume data if there is no write message in progress
+    if(writeBlockActive)
+    {
+      throw new IllegalStateException("Write message active");
+    }
+
     //If not already in consume mode, flip the buffer so that existing data are read from the beginning.
     if (produce)
     {
@@ -352,8 +361,8 @@ public class PipelineBuffer implements FillableChannelBuffer, DrainableChannelBu
   {
     try
     {
-      //Check lock.
-      checkOperationLock();
+      //Check we can consume data - no write message is in construction.
+      //checkConsumable();
 
       //Set to produce.
       setConsumeMode();
@@ -373,7 +382,7 @@ public class PipelineBuffer implements FillableChannelBuffer, DrainableChannelBu
     finally
     {
       //Release lock.
-      releaseOperationLock();
+//      releaseOperationLock();
     }
   }
 
@@ -383,8 +392,8 @@ public class PipelineBuffer implements FillableChannelBuffer, DrainableChannelBu
   {
     try
     {
-      //Check lock.
-      checkOperationLock();
+      //Check we can consume data - no write message is in construction.
+      //checkConsumable();
 
       //Set to produce.
       setConsumeMode();
@@ -410,7 +419,7 @@ public class PipelineBuffer implements FillableChannelBuffer, DrainableChannelBu
     finally
     {
       //Release lock.
-      releaseOperationLock();
+//      releaseOperationLock();
     }
   }
 
@@ -425,8 +434,8 @@ public class PipelineBuffer implements FillableChannelBuffer, DrainableChannelBu
   {
     try
     {
-      //Check lock.
-      checkOperationLock();
+      //Check we can produce data - no read message is in construction.
+      //checkProducable();
 
       //Set to produce.
       setProduceMode();
@@ -446,7 +455,7 @@ public class PipelineBuffer implements FillableChannelBuffer, DrainableChannelBu
     finally
     {
       //Release lock.
-      releaseOperationLock();
+//      releaseOperationLock();
     }
   }
 
@@ -455,8 +464,8 @@ public class PipelineBuffer implements FillableChannelBuffer, DrainableChannelBu
   {
     try
     {
-      //Check lock.
-      checkOperationLock();
+      //Check we can produce data - no read message is in construction.
+      //checkProducable();
 
       //Set to produce.
       setProduceMode();
@@ -481,8 +490,6 @@ public class PipelineBuffer implements FillableChannelBuffer, DrainableChannelBu
     }
     finally
     {
-      //Release lock.
-      releaseOperationLock();
     }
   }
 
@@ -710,6 +717,8 @@ public class PipelineBuffer implements FillableChannelBuffer, DrainableChannelBu
   //PRODUCE SCALAR DATA FROM THE BUFFER
   ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+  ///*** Stream produce - add to next available buffer position.
+
   /// BYTE DATA
 
   public PipelineBuffer produceByte(byte data)
@@ -727,20 +736,8 @@ public class PipelineBuffer implements FillableChannelBuffer, DrainableChannelBu
     return this;
   }
 
-  public PipelineBuffer produceByteAt(int atPosition, byte data)
-  {
-    //Set to consume mode.
-    setProduceMode();
-
-    //Get the next byte from the queue data.
-    internalBuffer.put(atPosition + this.produceIndex, data);
-
-    //Return the data.
-    return this;
-  }
-
-
   /// CHAR DATA
+
 
   public PipelineBuffer produceChar(char data)
   {
@@ -752,18 +749,6 @@ public class PipelineBuffer implements FillableChannelBuffer, DrainableChannelBu
 
     //Update the produce pointer.
     this.produceIndex += 2;
-
-    //Return the data.
-    return this;
-  }
-
-  public PipelineBuffer produceCharAt(int atPosition, char data)
-  {
-    //Set to produce mode.
-    setProduceMode();
-
-    //Get the next byte from the queue data.
-    char ret = internalBuffer.getChar(atPosition + this.produceIndex);
 
     //Return the data.
     return this;
@@ -786,28 +771,10 @@ public class PipelineBuffer implements FillableChannelBuffer, DrainableChannelBu
     return this;
   }
 
-  public PipelineBuffer produceShortAt(int atPosition, short data)
-  {
-    //Set to produce mode.
-    setProduceMode();
-
-    //Get the next byte from the queue data.
-    internalBuffer.putShort(atPosition + this.produceIndex, data);
-
-    //Return the data.
-    return this;
-  }
-
   /// INT DATA
 
   public PipelineBuffer produceInt(int data)
   {
-    //Make sure we aren't consuming a message block.
-    if(operationLock)
-    {
-      throw new IllegalStateException();
-    }
-
     //Set to produce mode.
     setProduceMode();
 
@@ -816,18 +783,6 @@ public class PipelineBuffer implements FillableChannelBuffer, DrainableChannelBu
 
     //Update the produce pointer.
     this.produceIndex += 4;
-
-    //Return the data.
-    return this;
-  }
-
-  public PipelineBuffer produceIntAt(int atPosition, int data)
-  {
-    //Set to produce mode.
-    setProduceMode();
-
-    //Get the next byte from the queue data.
-    internalBuffer.putInt(atPosition + this.produceIndex, data);
 
     //Return the data.
     return this;
@@ -850,18 +805,6 @@ public class PipelineBuffer implements FillableChannelBuffer, DrainableChannelBu
     return this;
   }
 
-  public PipelineBuffer produceLongAt(int atPosition, long data)
-  {
-    //Set to produce mode.
-    setProduceMode();
-
-    //Get the next byte from the queue data.
-    internalBuffer.putLong(atPosition + this.produceIndex, data);
-
-    //Return the data.
-    return this;
-  }
-
   /// FLOAT DATA
 
   public PipelineBuffer produceFloat(float data)
@@ -874,18 +817,6 @@ public class PipelineBuffer implements FillableChannelBuffer, DrainableChannelBu
 
     //Update the produce pointer.
     this.produceIndex += 4;
-
-    //Return the data.
-    return this;
-  }
-
-  public PipelineBuffer produceFloatAt(int atPosition, float data)
-  {
-    //Set to produce mode.
-    setProduceMode();
-
-    //Get the next byte from the queue data.
-    internalBuffer.putFloat(atPosition + this.produceIndex, data);
 
     //Return the data.
     return this;
@@ -908,13 +839,102 @@ public class PipelineBuffer implements FillableChannelBuffer, DrainableChannelBu
     return this;
   }
 
-  public PipelineBuffer produceDoubleAt(int atPosition, double data)
+  ///*** Block message produce - set at the buffer location from the start of the message.
+
+  /// BYTE DATA
+
+  public PipelineBuffer produceByteAt(int atPosition, byte data)
   {
-    //Set to produce mode.
-    setProduceMode();
+    //Make sure there is a write block in progress.
+    checkWriteLock();
 
     //Get the next byte from the queue data.
-    internalBuffer.putDouble(atPosition + this.produceIndex, data);
+    internalBuffer.put(atPosition + this.writeMessageStartPosition, data);
+
+    //Return the data.
+    return this;
+  }
+
+
+  /// CHAR DATA
+
+  public PipelineBuffer produceCharAt(int atPosition, char data)
+  {
+    //Make sure there is a write block in progress.
+    checkWriteLock();
+
+    //Get the next byte from the queue data.
+    internalBuffer.putChar(atPosition + this.writeMessageStartPosition, data);
+
+    //Return the data.
+    return this;
+  }
+
+  /// SHORT DATA
+
+  public PipelineBuffer produceShortAt(int atPosition, short data)
+  {
+    //Make sure there is a write block in progress.
+    checkWriteLock();
+
+    //Get the next byte from the queue data.
+    internalBuffer.putShort(atPosition + this.writeMessageStartPosition, data);
+
+    //Return the data.
+    return this;
+  }
+
+  /// INT DATA
+
+  public PipelineBuffer produceIntAt(int atPosition, int data)
+  {
+    //Make sure there is a write block in progress.
+    checkWriteLock();
+
+    //Get the next byte from the queue data.
+    internalBuffer.putInt(atPosition + this.writeMessageStartPosition, data);
+
+    //Return the data.
+    return this;
+  }
+
+  /// LONG DATA
+
+  public PipelineBuffer produceLongAt(int atPosition, long data)
+  {
+    //Make sure there is a write block in progress.
+    checkWriteLock();
+
+    //Get the next byte from the queue data.
+    internalBuffer.putLong(atPosition + this.writeMessageStartPosition, data);
+
+    //Return the data.
+    return this;
+  }
+
+  /// FLOAT DATA
+
+  public PipelineBuffer produceFloatAt(int atPosition, float data)
+  {
+    //Make sure there is a write block in progress.
+    checkWriteLock();
+
+    //Get the next byte from the queue data.
+    internalBuffer.putFloat(atPosition + this.writeMessageStartPosition, data);
+
+    //Return the data.
+    return this;
+  }
+
+  /// DOUBLE DATA
+
+  public PipelineBuffer produceDoubleAt(int atPosition, double data)
+  {
+    //Make sure there is a write block in progress.
+    checkWriteLock();
+
+    //Get the next byte from the queue data.
+    internalBuffer.putDouble(atPosition + this.writeMessageStartPosition, data);
 
     //Return the data.
     return this;
@@ -924,35 +944,50 @@ public class PipelineBuffer implements FillableChannelBuffer, DrainableChannelBu
   //OPERATION LOCKING FOR DELIMITED MESSAGING DATA.
   ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+//  /**
+//   * We can consume data if there is no write message in progress.
+//   */
+//  protected void checkConsumable()
+//  {
+//    //We can consume data if there is no write message in progress
+//    if(writeBlockActive)
+//    {
+//      throw new IllegalStateException("Write message active");
+//    }
+//  }
+//
+//  /**
+//   * We can produce data if there is no read message in progress.
+//   */
+//  protected void checkProducable()
+//  {
+//    //We can produce data if there is no read message in progress.
+//    if(readBlockActive)
+//    {
+//      throw new IllegalStateException("Read message active");
+//    }
+//  }
+//
+//  /**
+//   * Check that a read message is in progress.
+//   */
+//  protected void checkReadLock()
+//  {
+//    if(!readBlockActive)
+//    {
+//      throw new IllegalStateException("Read message block operation not active");
+//    }
+//  }
+
   /**
-   * Check the operation lock is false and set it to true if so.  If it is true then throw an illegal state
-   * exception.
-   *
-   * @throws IllegalStateException if there is a reentrant call.
+   * Check that a write message is in progress.
    */
-  protected void checkOperationLock()
+  protected void checkWriteLock()
   {
-    if (operationLock)
+    if(!writeBlockActive)
     {
-      throw new IllegalStateException();
+      throw new IllegalStateException("Write message block operation not active");
     }
-
-    //Set the operation lock.
-    operationLock = true;
-  }
-
-  /**
-   * Release the operation lock.  It must be set or else we have an illegal state.
-   */
-  protected void releaseOperationLock()
-  {
-    if (!operationLock)
-    {
-      throw new IllegalStateException();
-    }
-
-    //Set the operation lock.
-    operationLock = false;
   }
 
   /**
@@ -974,13 +1009,15 @@ public class PipelineBuffer implements FillableChannelBuffer, DrainableChannelBu
   //FIXED MESSAGE SIZE DELIMITING
   ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+  ///*** READ BLOCK
+
   /**
    * Try to start a message if there is enough data to satisfy it in the buffer.  If not then return false.
    *
    * @param length
    * @return
    */
-  public boolean tryStartMessage(int length)
+  public boolean tryStartReadMessage(int length)
   {
     //Make sure we are consuming.
     setConsumeMode();
@@ -989,22 +1026,19 @@ public class PipelineBuffer implements FillableChannelBuffer, DrainableChannelBu
     if(size() < length) return false;
 
     //Store the message block end position.
-    this.messageEndPosition = this.internalBuffer.position() + length;
-
-    //Store the pre-message buffer limit.
-    this.bufferLimit = this.produceIndex;
+    this.readMessageEndPosition = this.internalBuffer.position() + length;
 
     //Set the internal buffer limit to position + length.
-    this.internalBuffer.limit(this.messageEndPosition);
+    this.internalBuffer.limit(this.readMessageEndPosition);
 
-    //Set the message processing active.
-    this.operationLock = true;
+    //Set the read block active flag.
+    this.readBlockActive = true;
 
     //Return this.
     return true;
   }
 
-  public PipelineBuffer startMessage(int length)
+  public PipelineBuffer startReadMessage(int length)
   {
     //Make sure we are consuming.
     setConsumeMode();
@@ -1013,16 +1047,13 @@ public class PipelineBuffer implements FillableChannelBuffer, DrainableChannelBu
     if(size() < length) throw new BufferUnderflowException();
 
     //Store the message block end position.
-    this.messageEndPosition = this.internalBuffer.position() + length;
-
-    //Store the pre-message buffer limit.
-    this.bufferLimit = this.produceIndex;
+    this.readMessageEndPosition = this.internalBuffer.position() + length;
 
     //Set the internal buffer limit to position + length.
-    this.internalBuffer.limit(this.messageEndPosition);
+    this.internalBuffer.limit(this.readMessageEndPosition);
 
-    //Set the message processing active.
-    this.operationLock = true;
+    //Set the read block active flag.
+    this.readBlockActive = true;
 
     //Return this.
     return this;
@@ -1034,10 +1065,10 @@ public class PipelineBuffer implements FillableChannelBuffer, DrainableChannelBu
    *
    * @return
    */
-  public boolean hasMessageDataRemaining()
+  public boolean hasReadMessageDataRemaining()
   {
     //Throw an exception if we aren't processing a message and this method is called.
-    if(!operationLock) throw new IllegalStateException();
+    if(!readBlockActive) throw new IllegalStateException();
 
     //Return the hasRemaining state of the underlying buffer.
     return this.internalBuffer.hasRemaining();
@@ -1049,20 +1080,79 @@ public class PipelineBuffer implements FillableChannelBuffer, DrainableChannelBu
    *
    * @return
    */
-  public PipelineBuffer completeMessage()
+  public PipelineBuffer completeReadMessage()
   {
-    //Throw an exception if we aren't processing a message and this method is called.
-    if(!operationLock) throw new IllegalStateException();
-
     //Restore the buffer limit to the produce index.
     this.internalBuffer.limit(this.produceIndex);
 
     //Make sure the position is at the message end position - all data are consumed regardless if there are unconsumed
     //data at the end of the message.
-    this.internalBuffer.position(this.messageEndPosition);
+    this.internalBuffer.position(this.readMessageEndPosition);
 
-    //Close the message.
-    this.operationLock = false;
+    //Set the read block active flag.
+    this.readBlockActive = false;
+
+    //Make the consume index the read message end position.
+    this.consumeIndex = this.readMessageEndPosition;
+
+    //Return this.
+    return this;
+  }
+
+  ///*** WRITE BLOCK
+
+  public PipelineBuffer startWriteMessage()
+  {
+    //Make sure we are consuming.
+    setProduceMode();
+
+    //Set the write block active flag.
+    this.writeBlockActive = true;
+
+    //Store the message block end position.
+    this.writeMessageStartPosition = this.internalBuffer.position();
+
+    //Return this.
+    return this;
+  }
+
+  /**
+   * If we are processing message data then the limit has been set to the initial buffer consume position + message length.
+   * Return true if there are consumable data remaining.
+   *
+   * @return
+   */
+  public boolean hasWriteMessageSpaceRemaining()
+  {
+    //Throw an exception if we aren't processing a message and this method is called.
+    if(!writeBlockActive) throw new IllegalStateException();
+
+    //Return the hasRemaining state of the underlying buffer.
+    return this.internalBuffer.hasRemaining();
+  }
+
+  public int messageBlockWritePosition()
+  {
+    //Throw an exception if we aren't processing a message and this method is called.
+    if(!writeBlockActive) throw new IllegalStateException();
+
+    //Return the hasRemaining state of the underlying buffer.
+    return this.internalBuffer.position() - this.writeMessageStartPosition;
+  }
+
+  /**
+   * Complete the message block.  This must be called before the buffer can be used for anything other than consuming
+   * scalar data from the buffer with the consumeXXX() methods.
+   *
+   * @return
+   */
+  public PipelineBuffer completeWriteMessage()
+  {
+    //Reset the write block active flag.
+    this.writeBlockActive = false;
+
+    //Make the produce index the position.
+    this.produceIndex = this.internalBuffer.position();
 
     //Return this.
     return this;
