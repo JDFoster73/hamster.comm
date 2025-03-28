@@ -745,7 +745,7 @@ public class PipelineBuffer extends BaseBuffer implements FillableChannelBuffer,
     setProduceMode();
 
     //Get the next byte from the queue data.
-    char ret = internalBuffer.getChar();
+    internalBuffer.putChar(data);
 
     //Update the produce pointer.
     this.produceIndex += 2;
