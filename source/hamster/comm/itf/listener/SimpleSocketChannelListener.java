@@ -14,7 +14,21 @@ public abstract class SimpleSocketChannelListener implements SocketChannelListen
   @Override
   public void initController(SocketChannelController controller)
   {
+    //Store the controller instance.
     this.channelController = controller;
+
+    //Call the initialised() method.  Subclasses can extend this to get a notification when the
+    //controller has been initialised and so can start using the instance to send data for example.
+    initialised();
+  }
+
+  /**
+   *  Empty, default implementation of the initialised() method which is called when the channel controller
+   *  instance is received.
+   */
+  protected void initialised()
+  {
+
   }
 
   @Override
@@ -35,8 +49,8 @@ public abstract class SimpleSocketChannelListener implements SocketChannelListen
     //No op.  The superclass only implements this if required.
   }
 
-  @Override
-  public abstract void handleDataRead();
+  //@Override
+  //public abstract void handleDataRead();
 
   @Override
   public abstract void handleChannelWriteContinue();

@@ -26,6 +26,9 @@ public class PipelineBuffer extends BaseBuffer implements FillableChannelBuffer,
   //Set this to the internal buffer position at the end of the currently processed read message.
   private int readMessageEndPosition = 0;
 
+  //Set this to the internal buffer position at start end of the currently processed read message.
+  private int readMessageStartPosition = 0;
+
   //Set this to the internal buffer position at the start of the currently processed write message.
   private int writeMessageStartPosition = 0;
 
@@ -1028,6 +1031,9 @@ public class PipelineBuffer extends BaseBuffer implements FillableChannelBuffer,
     //Store the message block end position.
     this.readMessageEndPosition = this.internalBuffer.position() + length;
 
+    //Store the message block start position.
+    this.readMessageStartPosition = this.internalBuffer.position();
+
     //Set the internal buffer limit to position + length.
     this.internalBuffer.limit(this.readMessageEndPosition);
 
@@ -1048,6 +1054,9 @@ public class PipelineBuffer extends BaseBuffer implements FillableChannelBuffer,
 
     //Store the message block end position.
     this.readMessageEndPosition = this.internalBuffer.position() + length;
+
+    //Store the message block start position.
+    this.readMessageStartPosition = this.internalBuffer.position();
 
     //Set the internal buffer limit to position + length.
     this.internalBuffer.limit(this.readMessageEndPosition);
@@ -1094,6 +1103,31 @@ public class PipelineBuffer extends BaseBuffer implements FillableChannelBuffer,
 
     //Make the consume index the read message end position.
     this.consumeIndex = this.readMessageEndPosition;
+
+    //Return this.
+    return this;
+  }
+
+  /**
+   * Complete the message block.  This must be called before the buffer can be used for anything other than consuming
+   * scalar data from the buffer with the consumeXXX() methods.
+   *
+   * @return
+   */
+  public PipelineBuffer rewindReadMessage()
+  {
+    //Restore the buffer limit to the produce index.
+    this.internalBuffer.limit(this.produceIndex);
+
+    //Make sure the position is at the message end position - all data are consumed regardless if there are unconsumed
+    //data at the end of the message.
+    this.internalBuffer.position(this.readMessageStartPosition);
+
+    //Set the read block active flag.
+    this.readBlockActive = false;
+
+    //Make the consume index the read message end position.
+    this.consumeIndex = this.readMessageStartPosition;
 
     //Return this.
     return this;

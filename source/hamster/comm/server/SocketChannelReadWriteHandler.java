@@ -1,6 +1,7 @@
 package hamster.comm.server;
 
 import java.io.IOException;
+import java.nio.ByteBuffer;
 import java.nio.channels.SelectionKey;
 import java.nio.channels.Selector;
 import java.nio.channels.SocketChannel;
@@ -69,7 +70,14 @@ class SocketChannelReadWriteHandler implements ReadTargetListener, WriteChannelH
    * Channel object. Used for reading and writing data to the network channel.
    */
   private final SocketChannel channel;
-  
+
+  /**
+   * Zero-read buffer.  If the channel owner consumes no data when called to handle a read event,
+   * then use this buffer to do a read operation on the socket.  This will detect whether the read event
+   * is due to the channel closing.
+   */
+  private final ByteBuffer zeroReadBuffer = ByteBuffer.allocate(0);
+
   /**
    * <p>
    * A drain operation is required.  The OP_READ interest op is set and the OS has readable
@@ -161,6 +169,18 @@ class SocketChannelReadWriteHandler implements ReadTargetListener, WriteChannelH
     //the drainOpRequired flag will not have been reset so don't set the read mode to pause in this case.
     if(drainOpRequired && channel.isOpen())
     {
+      //Zero read the channel to see if the channel has closed.
+      int readLen = 0;
+      try
+      {
+        readLen = channel.read(zeroReadBuffer);
+      }
+      catch (IOException e)
+      {
+        //Channel has had a hard close.  Handle the channel shutdown.
+        handleWriteIOException(e);
+      }
+
       //
       setToReadPauseMode();
     }
@@ -183,6 +203,8 @@ class SocketChannelReadWriteHandler implements ReadTargetListener, WriteChannelH
     catch (IOException e)
     {
       // TODO LOGGIT?
+      // The channel is already useless and we can't do anything further.  Make sure that the key is deregistered and
+      // any state associated with the channel is cleaned up.
     }
     
     // Make sure the registered key is cancelled.
